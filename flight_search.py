@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
 import os
 import requests as rq
+from datetime import datetime, timedelta
 class FlightSearch:
     #This class is responsible for talking to the Flight Search API.
     def __init__(self):
-        self.search_endpoint = 'https://test.api.amadeus.com/v2/shopping/flight-offers'
         load_dotenv()
         self.apikey = os.getenv('FLIGHT_API_KEY')
         self.apisecret = os.getenv('FLIGHT_API_SECRET')
@@ -30,7 +30,38 @@ class FlightSearch:
             "keyword": q
         }
         cities = rq.get(cities_endpoint, headers=self.headers, params=param)
-        cities.raise_for_status()
-        return cities.json()['data'][0]['iataCode']
+        print(f"Status code {cities.status_code}. Airport IATA: {cities.text}")
+        try:
+            code = cities.json()["data"][0]['iataCode']
+        except IndexError:
+            print(f"IndexError: No airport code found for {q}.")
+            return "N/A"
+        except KeyError:
+            print(f"KeyError: No airport code found for {q}.")
+            return "Not Found"
+        return code
 
-
+    def search_flights(self, orig:str, dest:str, cur:str):
+        search_endpoint = 'https://test.api.amadeus.com/v2/shopping/flight-offers'
+        from_time = datetime.now() + timedelta(days=1)
+        to_time = datetime.now() + timedelta(weeks=26)
+        search_param = {
+            "originLocationCode": orig,
+            "destinationLocationCode": dest,
+            "departureDate": from_time.strftime("%Y-%m-%d"),
+            "returnDate": to_time.strftime("%Y-%m-%d"),
+            "adults": 1,
+            "nonStop": "true",
+            "currencyCode": cur,
+            "max": "10",
+        }
+        flights = rq.get(search_endpoint, headers=self.headers, params=search_param)
+        if flights.status_code != 200:
+            print(f"check_flights() response code: {flights.status_code}")
+            print("There was a problem with the flight search.\n"
+                  "For details on status codes, check the API documentation:\n"
+                  "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-offers-search/api"
+                  "-reference")
+            print("Response body:", flights.text)
+            return None
+        return flights.json()
